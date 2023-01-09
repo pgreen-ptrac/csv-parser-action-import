@@ -103,6 +103,67 @@ def handle_add_findings_template_name(findings_template_name, parser):
     if not prompt_continue_anyways(f'findings_template_name value \'{findings_template_name}\' from config does not match any Finding Layouts in platform. No Finding Layout will be added to reports.'):
         exit()
 
+
+def handle_add_parser_id(parser_id, parser):
+    """
+    Checks if the given the parser ID value from the config.yaml file matches the ID of an existing
+    plugin already imported in Plextrac. If the plugin exists in platform, adds this parser ID to the
+    parser object.
+
+    Prompts the user to choose a parser ID if one is not supplied in the config, or if the supplied
+    value doesn't match an exisiting plugin.
+    """
+    parsers = []
+
+    log.info(f'Loading parsers from instance...')
+    response = request_get_tenant_parsers(auth.base_url, auth.get_auth_headers(), auth.tenant_id)
+    if response.get('status') != "success":
+        log.debug(response)
+        log.error(f'Could not load parsers from instance. Exiting...')
+        exit()
+
+    parsers = response.get('parsers')
+    log.debug(parsers)
+    if len(parsers) < 1:
+        log.error(f'Plextrace contains no parsers in platform. Exiting...')
+        exit()
+
+    if parser_id == "":
+        parser_id, parser_name = pick_parser(parsers)
+        parser.parser_id = parser_id
+        return
+
+    parser_ids = list(map(lambda x: x['id'], parsers))
+    if parser_id in parser_ids:
+        parser.parser_id = parser_id
+        return
+    
+    input = prompt_user_options(f"Parser \'{parser_id}\' does not exist in platform. Do you want to pick a different parser", "Invalid option", ["y", "n"])
+    if input == "y":
+        parser_id, parser_name = pick_parser(parsers)
+        parser.parser_id = parser_id
+        return
+    exit()
+
+
+def pick_parser(parsers):
+    """
+    Display the list of parsers in the instance to the user and prompts them to pick a parser.
+    Returns the parser_id of the selected parser.
+    """
+    log.info(f'List of Parsers in tenant {auth.tenant_id}:')
+    for index, parser in enumerate(parsers):
+        log.info(f'Index: {index+1}   Name: {parser.get("name")}')
+
+    parser_index = prompt_user_list("Please enter a parser index from the list above.", "Index out of range.", len(parsers))
+    parser = parsers[parser_index]
+    parser_id = parser.get('id')
+    parser_name = parser.get("name")
+    log.debug(f'returning picked parser with parser_id {parser_id}')
+    log.info(f'Selected Parser: {parser_index+1} - {parser_name}')
+
+    return parser_id, parser_name
+
 #----------End Loading and Validating Input CSVs----------
     
 
@@ -143,6 +204,12 @@ if __name__ == '__main__':
         log.info(f'Using findings layout \'{findings_layout_name}\' from config...')
         handle_add_findings_template_name(findings_layout_name, parser)
 
+    parser_id = ""
+    if args.get('parser_id') != None and args.get('parser_id') != "":
+        parser_id = args.get('parser_id')
+        log.info(f'Using plugin \'{parser_id}\' from config...')
+        handle_add_parser_id(parser_id, parser)
+
     parser.parse_data()
     parser.display_parser_results()
 
@@ -151,7 +218,7 @@ if __name__ == '__main__':
     log.info(f'If the data was not parsed correctly, please exit the script, fix the data, and re-run.')
 
     if prompt_continue_anyways(f'\nThis will import data into {len(parser.clients)} client(s). The more clients you have the harder it will be to undo this import.'):
-        parser.import_data(auth)
+        parser.import_parser_actions(auth)
         log.info(f'Import Complete. Additional logs were added to {log.LOGS_FILE_PATH}')
     
     exit()

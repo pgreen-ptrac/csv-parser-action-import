@@ -360,6 +360,63 @@ class Parser():
             'validation_type': None,
             'input_blanks': False,
             'path': ['locationUrl']
+        },
+        # PARSER ACTION INFO
+        'parser_action_id': {
+            'id': 'parser_action_id',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': None,
+            'input_blanks': False, #TODO probably can't be blank, might need to make one up or skip
+            'path': ['id']
+        },
+        'parser_action_action': {
+            'id': 'parser_action_action',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': 'PARSER_ACTION', # validate
+            'input_blanks': False,
+            'path': ['action']
+        },
+        'parser_action_title': {
+            'id': 'parser_action_title',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': None,
+            'input_blanks': False, #TODO can't be blank, probably skip - probably handle before this gets called
+            'path': ['title']
+        },
+        'parser_action_severity': {
+            'id': 'parser_action_severity',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': 'SEVERITY', # validate
+            'input_blanks': False,
+            'path': ['severity']
+        },
+        'parser_action_description': {
+            'id': 'parser_action_description',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': None,
+            'input_blanks': False,
+            'path': ['description']
+        },
+        'parser_action_writeup_id': { #TODO not implemented - need to see how it relates to object - check if existing writeup gets linked by providing writeup_id
+            'id': 'parser_action_writeup_id',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': None,
+            'input_blanks': False,
+            'path': ['writeupID']
+        },
+        'parser_action_writeup_label': { #TODO not implemented - need to see how it relates to object
+            'id': 'parser_action_writeup_label',
+            'object_type': 'PARSER_ACTION',
+            'data_type' : 'DETAIL',
+            'validation_type': None,
+            'input_blanks': False,
+            'path': ['writeupLabel']
         }
     }
     #--- END CSV---
@@ -468,6 +525,24 @@ class Parser():
     #--- END Asset---
 
 
+    #--- PARSER ACTION - template of parser action object - list of parser actions generated while running the script---
+
+    # you can add data here that should be added to all assets
+    parser_action_template = { # need all arrays build out to prevent KEY ERR when adding data
+        'sid': None,
+        'id': None,
+        'action': "DEFAULT",
+        'title': None,
+        'severity': "Informational",
+        'description': "",
+        'writeupID': "",
+        'writeupLabel': ""
+    }
+
+    parser_actions = {}
+    #--- END Parser ACtion---
+
+
     # information about different states the script can run into
     log_messages = {
         'NO_CLIENT_DESIGNATION': {
@@ -533,6 +608,7 @@ class Parser():
         """
         self.csv_headers_mapping = None
         self.csv_data = None
+        self.parser_id = None
         self.logging_data = None
         self.parser_progess = None
         self.parser_date = time.strftime("%m/%d/%Y", time.localtime(time.time()))
@@ -803,7 +879,7 @@ class Parser():
 
         matching_findings = list(filter(lambda x: (value == x['title']), matching_findings))
 
-        # return finding
+        # return new finding
         new_sid = uuid4()
         finding = deepcopy(self.finding_template)
         finding['sid'] = new_sid
@@ -918,6 +994,47 @@ class Parser():
 
         self.affected_assets[new_sid] = affected_asset
         self.findings[finding_sid]['affected_asset_sid'] = new_sid
+
+
+    def handle_parser_action(self, row):
+        """
+        Returns a parser action sid and parser action id based the csv columns specified that relate to parser action data.
+
+        Looks through list of parser actions already created during this running instance of the script
+        Determines if a parser action has a duplicate and needs a different handling
+
+        Creates new parser action and adds all csv column data that relates to the parser action
+
+        Returns the parser action sid and parser action id of the new parser action
+        """
+        matching_parser_actions = list(self.parser_actions.values())
+
+        # filter for matching parser actions
+        header = self.get_header_from_key("parser_action_id")
+
+        index = list(self.csv_headers_mapping.keys()).index(header)
+        value = row[index]
+
+        matching_parser_actions = list(filter(lambda x: (value == x['id']), matching_parser_actions))
+
+        # return matched parser action
+        if len(matching_parser_actions) > 0:
+            parser_action = matching_parser_actions[0]
+            log.info(f'Found existing parser action {parser_action["id"]}')
+            return parser_action['sid'], parser_action['id']
+
+        # return new parser action
+        log.info(f'No parser action found. Creating new parser action...')
+        new_sid = uuid4()
+        parser_action = deepcopy(self.parser_action_template)
+        parser_action['sid'] = new_sid
+
+        self.add_data_to_object(parser_action, "PARSER_ACTION", row)
+
+        self.parser_actions[new_sid] = parser_action
+
+        return new_sid, parser_action['id']
+
     #----------End Object Handling----------
 
 
@@ -985,6 +1102,12 @@ class Parser():
             except ValueError:
                 log.exception(f'Header "{header}" value "{value}" cannot be converted to a boolean. Skipping...')
             return
+
+        if mapping['validation_type'] == "PARSER_ACTION":
+            actions = ["IGNORE", "DEFAULT", "LINK"]
+            if value not in actions:
+                log.warning(f'Header "{header}" value "{value}" is not a valid parser action. Must be in the list ["IGNORE", "DEFAULT", "LINK"] Skipping...')
+                return
         
         self.set_value(obj, path, str(value))
 
@@ -1106,7 +1229,7 @@ class Parser():
                 log.warning(f'No Plextrac mapping for <{data_mapping_key}>, was it typed incorrectly? Ignoring...')
                 continue
 
-            # only loop through the field for hte correct obj type
+            # only loop through the field for the correct obj type
             if data_mapping['object_type'] != obj_type:
                 continue
 
@@ -1147,29 +1270,34 @@ class Parser():
         Creates finding
         Creates asset
         """
-        # query csv row for client specific info and create or choose client
-        client_sid, client_name = self.handle_client(row)
-        if client_sid == None:
-            return
+        # # query csv row for client specific info and create or choose client
+        # client_sid, client_name = self.handle_client(row)
+        # if client_sid == None:
+        #     return
 
-        # query csv row for report specific data and creaate or choose report
-        report_sid, report_name = self.handle_report(row, client_sid)   
-        if report_sid == None:
-            return     
+        # # query csv row for report specific data and creaate or choose report
+        # report_sid, report_name = self.handle_report(row, client_sid)   
+        # if report_sid == None:
+        #     return     
         
-        # query csv row for finding specific data and create finding
-        finding_sid, finding_name = self.handle_finding(row, client_sid, report_sid)
-        if finding_sid == None:
+        # # query csv row for finding specific data and create finding
+        # finding_sid, finding_name = self.handle_finding(row, client_sid, report_sid)
+        # if finding_sid == None:
+        #     return
+
+        # self.handle_multi_asset(row, client_sid, finding_sid)
+
+        # # query csv row for asset specific data and create or choose asset
+        # asset_sid, asset_name = self.handle_asset(row, client_sid, finding_sid)
+
+        # # if there was a header mapped to a single asset, handle the potential affected asset data for the single asset
+        # if finding_sid != None and asset_sid != None:
+        #     self.handle_affected_asset(row, finding_sid)
+
+        # query csv row for parser action specific info and create or choose parser action
+        parser_action_sid, parser_action_id = self.handle_parser_action(row)
+        if parser_action_sid == None:
             return
-
-        self.handle_multi_asset(row, client_sid, finding_sid)
-
-        # query csv row for asset specific data and create or choose asset
-        asset_sid, asset_name = self.handle_asset(row, client_sid, finding_sid)
-
-        # if there was a header mapped to a single asset, handle the potential affected asset data for the single asset
-        if finding_sid != None and asset_sid != None:
-            self.handle_affected_asset(row, finding_sid)
 
     def parse_data(self):
         """
@@ -1183,30 +1311,41 @@ class Parser():
         """
         # self.create_log_file()
 
-        # get index of 'name' obj in self.data_mapping - this will be the index to point us to the name column in the csv
+        # get index of 'parser_action_id' obj in self.data_mapping - this will be the index to point us to the name column in the csv
         try:
-            csv_finding_title_index = list(self.csv_headers_mapping.values()).index('finding_title')
+            csv_parser_action_id_index = list(self.csv_headers_mapping.values()).index('parser_action_id')
         except ValueError:
-            log.critical(f'Did not map "finding_title" key to any csv headers. Cannot process CSV. Exiting...')
+            log.critical(f'Did not map "parser_action_id" key to any csv headers. Cannot process CSV. Exiting...')
             exit()
+        try:
+            csv_parser_action_title_index = list(self.csv_headers_mapping.values()).index('parser_action_title')
+        except ValueError:
+            log.critical(f'Did not map "parser_action_title" key to any csv headers. Cannot process CSV. Exiting...')
+            exit()
+        
 
         log.info(f'---Beginning CSV parsing---')
         self.parser_progess = 0
         for row in self.csv_data:
-            log.info(f'=======Parsing Finding {self.parser_progess+1}=======')
+            log.info(f'=======Parsing Action {self.parser_progess+1}=======')
 
-            # checking if current row contains a finding since the csv could have rows that extend beyond finding data
-            if row[csv_finding_title_index] == "":
-                log.warning(f'Row {self.parser_progess+2} in the CSV did not have a value for the finding_title. Skipping...')
+            # checking if current row contains a parser action since the csv could have rows that extend beyond entered data
+            if row[csv_parser_action_id_index] == "":
+                log.warning(f'Row {self.parser_progess+2} in the CSV did not have a value for the parser_action_id. Skipping...')
+                self.parser_progess += 1
+                continue
+            if row[csv_parser_action_title_index] == "":
+                log.warning(f'Row {self.parser_progess+2} in the CSV did not have a value for the parser_action_name. Skipping...')
                 self.parser_progess += 1
                 continue
             
-            vuln_name = row[csv_finding_title_index]
-            log.info(f'---{vuln_name}---')
+            action_id  = row[csv_parser_action_id_index]
+            action_name = row[csv_parser_action_title_index]
+            log.info(f'---{action_name} ({action_id})---')
             self.parser_row(row)
 
             self.parser_progess += 1
-            log.info(f'=======End {vuln_name}=======')
+            log.info(f'=======End {action_name} ({action_id})=======')
 
             # if self.parser_progess >= 150:
             #     break
@@ -1304,3 +1443,50 @@ class Parser():
                             log.warning(f'Could not update finding. Skipping...')
                             continue
                         log.success(f'Successfully added asset info to finding!')
+
+    def import_parser_actions(self, auth):
+        """
+        Calls Plextrac's API to creates new parser actions or update existing ones
+        """
+        # loads existing parser actions
+        log.info(f'Loading existing \'{self.parser_id}\' parser actions...')
+        response = request_get_tenant_parser_actions(auth.base_url, auth.get_auth_headers(), auth.tenant_id, self.parser_id)
+        if response.get('status') != "success":
+            log.debug(response)
+            log.error(f'Cold not load existing \'{self.parser_id}\' parser actions from instance. Exiting...')
+            exit()
+
+        existing_parser_actions_in_instance = response.get('actions').get('actions')
+        existing_parser_actions_ids_in_instance = list(map(lambda x: x['id'], existing_parser_actions_in_instance))
+        log.debug(f'existing parser actions in platform: {existing_parser_actions_ids_in_instance}')
+
+        # send API creation requests to Plextrac
+        log.info(f'---Importing data---')
+        # parser actions
+        for parser_action in self.parser_actions.values():
+            payload = deepcopy(parser_action)
+            payload.pop("sid")
+            log.debug(payload)
+            
+            if parser_action['id'] in existing_parser_actions_ids_in_instance:
+                # parser action already exists in Plextrac
+                log.info(f'Parser action already exists. Updating parser action <{payload["title"]} ({payload["id"]})>')
+                parser_action_id = payload['id']
+                payload.pop("id")
+                payload.pop("title")
+                payload.pop("description")
+                log.debug(f'You can only update Severity, Action, and Linked Writeup. Other data fields will be ignored.')
+                response = request_update_parser_action(auth.base_url, auth.get_auth_headers(), payload, auth.tenant_id, self.parser_id, parser_action_id)
+                if response.get('status') != "success":
+                    log.warning(f'Could not update parser action. Skipping...')
+                    continue
+                log.success(f'Successfully updated parser action!')
+            
+            else:
+                # parser action does not exist in Plextrac
+                log.info(f'Creating parser action <{payload["title"]} ({payload["id"]})>')
+                response = request_create_tenant_parser_action(auth.base_url, auth.get_auth_headers(), payload, auth.tenant_id, self.parser_id)
+                if response.get("status") != "success":
+                    log.warning(f'Could not create parser action. Skipping...')
+                    continue
+                log.success(f'Successfully created parser action!')

@@ -105,6 +105,6 @@ def print_script_info():
 
 
 
-console_log_level = logging.INFO
+console_log_level = logging.DEBUG
 file_log_level = logging.INFO
-log = LogFormatHandler(console_log_level, file_log_level, output_to_file=True) # change out_to_file to write console logs to file
+log = LogFormatHandler(console_log_level, file_log_level, output_to_file=False) # change out_to_file to write console logs to file

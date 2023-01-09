@@ -41,7 +41,7 @@ def request_get(base_url, request_root, request_path, request_name, headers):
 
             if response.status_code != 200:
                 err_non_200_response(request_name, response.status_code, response.reason)
-                log.warn(f'Plextrac message: {response_json.get("message")}')
+                log.warning(f'Plextrac message: {response_json.get("message")}')
         except Exception as e:
             err_invalid_json_response(request_name, e)
             return response
@@ -68,7 +68,7 @@ def request_post(base_url, request_root, request_path, request_name, headers, pa
 
             if response.status_code != 200:
                 err_non_200_response(request_name, response.status_code, response.reason)
-                log.warn(f'Plextrac message: {response_json.get("message")}')
+                log.warning(f'Plextrac message: {response_json.get("message")}')
         except Exception as e:
             err_invalid_json_response(request_name, e)
             return response
@@ -95,7 +95,7 @@ def request_post_multipart(base_url, request_root, request_path, request_name, h
 
             if response.status_code != 200:
                 err_non_200_response(request_name, response.status_code, response.reason)
-                log.warn(f'Plextrac message: {response_json.get("message")}')
+                log.warning(f'Plextrac message: {response_json.get("message")}')
         except Exception as e:
             err_invalid_json_response(request_name, e)
             return response
@@ -122,7 +122,7 @@ def request_put(base_url, request_root, request_path, request_name, headers, pay
 
             if response.status_code != 200:
                 err_non_200_response(request_name, response.status_code, response.reason)
-                log.warn(f'Plextrac message: {response_json.get("message")}')
+                log.warning(f'Plextrac message: {response_json.get("message")}')
         except Exception as e:
             err_invalid_json_response(request_name, e)
             return response
@@ -149,7 +149,7 @@ def request_delete(base_url, request_root, request_path, request_name, headers):
 
             if response.status_code != 200:
                 err_non_200_response(request_name, response.status_code, response.reason)
-                log.warn(f'Plextrac message: {response_json.get("message")}')
+                log.warning(f'Plextrac message: {response_json.get("message")}')
         except Exception as e:
             err_invalid_json_response(request_name, e)
             return response
@@ -307,3 +307,28 @@ def request_list_findings_templates(base_url, headers):
     root = "/api/v1"
     path = f'/field-templates'
     return request_get(base_url, root, path, name, headers)
+
+#----------Parser Action Endpoints----------
+def request_get_tenant_parsers(base_url, headers, tenant_id):
+    name = "Get Tenant Parsers"
+    root = "/api/v1"
+    path = f'/tenant/{tenant_id}/actions'
+    return request_get(base_url, root, path, name, headers)
+
+def request_get_tenant_parser_actions(base_url, headers, tenant_id, parser_id):
+    name = "Get Tenant Parser Actions"
+    root = "/api/v1"
+    path = f'/tenant/{tenant_id}/actions/{parser_id}?limit=985&skip=0'
+    return request_get(base_url, root, path, name, headers)
+
+def request_create_tenant_parser_action(base_url, headers, payload, tenant_id, parser_id):
+    name = "Create Tenant Parser Action"
+    root = "/api/v1"
+    path = f'/tenant/{tenant_id}/actions/{parser_id}/action'
+    return request_post(base_url, root, path, name, headers, payload)
+
+def request_update_parser_action(base_url, headers, payload, tenant_id, parser_id, action_id):
+    name = "Update Parser Action"
+    root = "/api/v1"
+    path = f'/tenant/{tenant_id}/actions/{parser_id}/action/{action_id}'
+    return request_put(base_url, root, path, name, headers, payload)
