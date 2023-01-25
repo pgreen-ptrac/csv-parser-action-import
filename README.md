@@ -22,7 +22,8 @@ To import a CSV with data, you must create a mapping to tell the script where th
 - Make a copy of the csv file with the data you want to import.
 - Rename the copy to `header_mapping.csv`. If you choose a different file name you will need to update the `csv_headers_file_path` value in the `config.yaml` file.
 - Open the `header_mapping.csv` and delete all rows except the header row.
-- In the second row, for each column you want to import, add a location key. Available keys are 
+- In the second row, for each column you want to import, add a location key. Available keys are `parser_action_id`, `parser_action_title`, `parser_action_severity`, `parser_action_description`, and `parser_action_action`.
+
 - Move this file to the main directory where you cloned this repo. If you place it in a different directory you will need to update the `csv_headers_file_path` value in the `config.yaml` file.
 
 ## Credentials
