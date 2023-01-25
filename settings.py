@@ -91,11 +91,11 @@ class LogFormatHandler():
 
 
 script_info = ["====================================================================",
-               "= General CSV Import Script                                        =",
+               "= Import Parser Actions from CSV                                   =",
                "=------------------------------------------------------------------=",
-               "= Takes a CSV with rows representing client, report, finding and   =",
-               "= asset data and a CSV with how to map each column to a            =",
-               "= location in Plextrac. Parses the CSV and import data to Plextrac =",
+               "= Takes a CSV with rows representing a parser action and a CSV     =",
+               "= with how to map each column to a location in Plextrac. Parses    =",
+               "= the CSV and import data to Plextrac                              =",
                "===================================================================="
             ]
 

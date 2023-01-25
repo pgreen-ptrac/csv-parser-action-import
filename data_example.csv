@@ -1,0 +1,2 @@
+﻿id,name,severity,description,action
+1234,my vuln name,Medium,This is a bad vuln.,DEFAULT
